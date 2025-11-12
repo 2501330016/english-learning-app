@@ -15,11 +15,13 @@ import { AudioPlayer } from "@/components/audio/audio-player"
 interface QuizCardProps {
   word: VocabularyWord
   onAnswer: (isCorrect: boolean, userAnswer: string, timeTaken: number) => void
+  onNext?: () => void
+  isLastQuestion?: boolean
   questionNumber: number
   totalQuestions: number
 }
 
-export function QuizCard({ word, onAnswer, questionNumber, totalQuestions }: QuizCardProps) {
+export function QuizCard({ word, onAnswer, onNext, isLastQuestion, questionNumber, totalQuestions }: QuizCardProps) {
   const [userAnswer, setUserAnswer] = useState("")
   const [showResult, setShowResult] = useState(false)
   const [isCorrect, setIsCorrect] = useState(false)
@@ -155,18 +157,43 @@ export function QuizCard({ word, onAnswer, questionNumber, totalQuestions }: Qui
           </div>
         )}
 
-        {/* Action Buttons */}
+        {/* Action Buttons: left slot for submit/restart, right slot always shows Next (disabled until result) */}
         <div className="flex gap-3">
-          {!showResult ? (
-            <Button onClick={handleSubmit} disabled={!userAnswer.trim()} className="flex-1" size="lg">
-              Submit Answer
+          <div className="flex-1">
+            {!showResult ? (
+              <Button onClick={handleSubmit} disabled={!userAnswer.trim()} className="w-full" size="lg">
+                Submit Answer
+              </Button>
+            ) : (
+              <Button
+                onClick={() => {
+                  // Restart the entire quiz by reloading the page
+                  window.location.reload()
+                }}
+                variant="outline"
+                size="lg"
+                className="gap-2 w-full"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Try Another Quiz
+              </Button>
+            )}
+          </div>
+
+          <div className="flex-1">
+            <Button
+              onClick={() => {
+                if (typeof onNext === "function") {
+                  onNext()
+                }
+              }}
+              size="lg"
+              disabled={!showResult}
+              className="w-full"
+            >
+              {isLastQuestion ? "Finish" : "Next"}
             </Button>
-          ) : (
-            <Button onClick={() => window.location.reload()} variant="outline" size="lg" className="gap-2">
-              <RotateCcw className="w-4 h-4" />
-              Try Another Quiz
-            </Button>
-          )}
+          </div>
         </div>
       </CardContent>
     </Card>

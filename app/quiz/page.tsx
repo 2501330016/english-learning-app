@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { QuizCard } from "@/components/quiz/quiz-card"
-import { QuizResults } from "@/components/quiz/quiz-results"
 import { getRandomWords, type VocabularyWord } from "@/lib/vocabulary-data"
 import { ProgressManager, type QuizResult } from "@/lib/user-progress"
 import { Button } from "@/components/ui/button"
@@ -12,22 +11,21 @@ import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 
 export default function QuizPage() {
-  const [words, setWords] = useState<VocabularyWord[]>([])
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  // Single-question flow: load one random word, then fetch a new one on Next
+  const [currentWord, setCurrentWord] = useState<VocabularyWord | null>(null)
+  const [questionsAnswered, setQuestionsAnswered] = useState(0)
   const [quizResults, setQuizResults] = useState<QuizResult[]>([])
-  const [isQuizComplete, setIsQuizComplete] = useState(false)
-  const [quizStartTime] = useState(Date.now())
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
-    // Initialize quiz with 5 random words
-    const randomWords = getRandomWords(5)
-    setWords(randomWords)
+    // Initialize with a single random word
+    const random = getRandomWords(1)[0]
+    setCurrentWord(random)
   }, [])
 
   const handleAnswer = (isCorrect: boolean, userAnswer: string, timeTaken: number) => {
-    const currentWord = words[currentQuestionIndex]
+    if (!currentWord) return
     const result: QuizResult = {
       wordId: currentWord.id,
       isCorrect,
@@ -41,27 +39,24 @@ export default function QuizPage() {
     const progressManager = ProgressManager.getInstance()
     progressManager.recordQuizResult(result, currentWord)
 
-    // Add to results
-    const newResults = [...quizResults, result]
-    setQuizResults(newResults)
+  // Add to results (use functional update to avoid stale closures)
+  setQuizResults((prev) => [...prev, result])
+    // Mark that a question was answered. Next must be pressed to get a new one.
+    setQuestionsAnswered((n) => n + 1)
+  }
 
-    // Move to next question or complete quiz
-    if (currentQuestionIndex < words.length - 1) {
-      setTimeout(() => {
-        setCurrentQuestionIndex(currentQuestionIndex + 1)
-      }, 2000) // Show result for 2 seconds before next question
-    } else {
-      setTimeout(() => {
-        setIsQuizComplete(true)
-      }, 2000)
-    }
+  const handleNext = () => {
+    // Fetch a fresh random word and replace the current one. Keeping the
+    // previous results in quizResults allows the user to review later.
+    const random = getRandomWords(1)[0]
+    setCurrentWord(random)
   }
 
   if (!mounted) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>
   }
 
-  if (words.length === 0) {
+  if (!currentWord) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="max-w-md">
@@ -79,7 +74,8 @@ export default function QuizPage() {
     )
   }
 
-  const totalQuizTime = Math.floor((Date.now() - quizStartTime) / 1000)
+  // prevent lint warning for quizResults not being used elsewhere
+  void quizResults
 
   return (
     <div className="min-h-screen bg-background">
@@ -100,25 +96,23 @@ export default function QuizPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline">
-                {isQuizComplete ? "Complete" : `${currentQuestionIndex + 1}/${words.length}`}
-              </Badge>
+              <Badge variant="outline">Answered: {questionsAnswered}</Badge>
             </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
-        {isQuizComplete ? (
-          <QuizResults results={quizResults} words={words} totalTime={totalQuizTime} />
-        ) : (
-          <QuizCard
-            word={words[currentQuestionIndex]}
-            onAnswer={handleAnswer}
-            questionNumber={currentQuestionIndex + 1}
-            totalQuestions={words.length}
-          />
-        )}
+        {/* Single-question flow: always render the QuizCard for the current word */}
+        <QuizCard
+          key={currentWord.id}
+          word={currentWord}
+          onAnswer={handleAnswer}
+          onNext={handleNext}
+          isLastQuestion={false}
+          questionNumber={1}
+          totalQuestions={1}
+        />
       </main>
     </div>
   )
