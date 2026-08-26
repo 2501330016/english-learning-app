@@ -8,169 +8,138 @@ interface AddWordFormProps {
   onWordAdded: () => void
 }
 
-export function AddWordForm({ onWordAdded }: AddWordFormProps) {
+export function AddWordForm({
+  onWordAdded,
+}: AddWordFormProps) {
   const [word, setWord] = useState("")
   const [definition, setDefinition] = useState("")
-  const [exampleSentence, setExampleSentence] = useState("")
-  const [notes, setNotes] = useState("") // 新しく追加
-  const [isRecording, setIsRecording] = useState(false)
-  const [recorderSupported, setRecorderSupported] = useState(true)
-  const [audioDataUrl, setAudioDataUrl] = useState<string | undefined>(undefined)
-  const [audioBlob, setAudioBlob] = useState<Blob | undefined>(undefined)
-  const mediaChunksRef = useState<Blob[]>([])[0]
-  let mediaRecorder: MediaRecorder | null = null
+  const [exampleSentence, setExampleSentence] =
+    useState("")
+  const [notes, setNotes] = useState("")
 
-  // Initialize support
-  if (typeof window !== "undefined" && !("MediaRecorder" in window)) {
-    // Not supported
-    if (recorderSupported) setRecorderSupported(false)
-  }
+  const handleSubmit = (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault()
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      mediaRecorder = new MediaRecorder(stream)
-      mediaChunksRef.length = 0
+    const trimmedWord = word.trim()
+    const trimmedDefinition =
+      definition.trim()
 
-      mediaRecorder.ondataavailable = (e: BlobEvent) => {
-        const d = e.data
-        if (d && (d as Blob).size > 0) mediaChunksRef.push(d as Blob)
-      }
-
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(mediaChunksRef, { type: "audio/webm" })
-        // store raw blob for durable offline storage
-        setAudioBlob(blob)
-
-        // prefer object URL for preview (faster, less memory)
-        try {
-          const url = URL.createObjectURL(blob)
-          setAudioDataUrl(url)
-        } catch (
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          _
-        ) {
-          const reader = new FileReader()
-          reader.onloadend = () => {
-            setAudioDataUrl(reader.result as string)
-          }
-          reader.readAsDataURL(blob)
-        }
-
-        // stop all tracks
-        stream.getTracks().forEach((t) => t.stop())
-      }
-
-      mediaRecorder.start()
-      setIsRecording(true)
-    } catch (
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      _
+    if (
+      !trimmedWord ||
+      !trimmedDefinition
     ) {
-      console.error("Recording start failed:")
-      setRecorderSupported(false)
+      return
     }
-  }
 
-  const stopRecording = () => {
-    try {
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop()
-      }
-    } catch (
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      _
-    ) {
-      console.error("Error stopping recorder:")
-    }
-    setIsRecording(false)
-  }
+    const manager =
+      CustomVocabularyManager.getInstance()
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!word || !definition || !exampleSentence) return
-
-    const manager = CustomVocabularyManager.getInstance()
     manager.addWord({
-      word,
-      definition,
-      exampleSentence,
-      notes, // ここにメモも保存
-      audioBlob: audioBlob,
+      word: trimmedWord,
+      definition: trimmedDefinition,
+      exampleSentence:
+        exampleSentence.trim(),
+      notes:
+        notes.trim() || undefined,
+
       blankPosition: 0,
       difficulty: "intermediate",
       category: "daily",
-      partOfSpeech: "noun",
+      partOfSpeech: "unknown",
     })
 
     setWord("")
     setDefinition("")
     setExampleSentence("")
     setNotes("")
+
     onWordAdded()
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form
+      onSubmit={handleSubmit}
+      className="max-w-xl space-y-5"
+    >
       <div>
-        <label className="block text-sm font-medium">Word</label>
+        <label className="block text-sm font-medium mb-1">
+          Word
+        </label>
+
         <input
           type="text"
           value={word}
-          onChange={(e) => setWord(e.target.value)}
-          className="mt-1 block w-full border rounded px-2 py-1"
+          onChange={(event) =>
+            setWord(event.target.value)
+          }
+          placeholder="e.g. handle"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-primary"
           required
+          autoFocus
         />
       </div>
+
       <div>
-        <label className="block text-sm font-medium">Definition</label>
+        <label className="block text-sm font-medium mb-1">
+          Meaning
+        </label>
+
         <input
           type="text"
           value={definition}
-          onChange={(e) => setDefinition(e.target.value)}
-          className="mt-1 block w-full border rounded px-2 py-1"
+          onChange={(event) =>
+            setDefinition(
+              event.target.value
+            )
+          }
+          placeholder="e.g. 対応する、処理する"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-primary"
           required
         />
       </div>
+
       <div>
-        <label className="block text-sm font-medium">Example Sentence</label>
-        <input
-          type="text"
+        <label className="block text-sm font-medium mb-1">
+          Example sentence
+        </label>
+
+        <textarea
           value={exampleSentence}
-          onChange={(e) => setExampleSentence(e.target.value)}
-          className="mt-1 block w-full border rounded px-2 py-1"
-          required
+          onChange={(event) =>
+            setExampleSentence(
+              event.target.value
+            )
+          }
+          placeholder="後から追加することもできます"
+          rows={3}
+          className="w-full rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-primary"
         />
       </div>
+
       <div>
-        <label className="block text-sm font-medium">Memo (optional)</label>
+        <label className="block text-sm font-medium mb-1">
+          Memo
+        </label>
+
         <textarea
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          className="mt-1 block w-full border rounded px-2 py-1"
+          onChange={(event) =>
+            setNotes(event.target.value)
+          }
+          placeholder="自分用のメモ"
           rows={3}
+          className="w-full rounded-md border border-border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-primary"
         />
       </div>
-      <div>
-        <label className="block text-sm font-medium">Pronunciation (recorded)</label>
-        <div className="mt-1 flex items-center gap-2">
-          {recorderSupported ? (
-            <>
-              <Button type="button" onClick={isRecording ? stopRecording : startRecording} className="mr-2">
-                {isRecording ? "Stop" : "Record"}
-              </Button>
-              {audioDataUrl ? (
-                <audio src={audioDataUrl} controls className="max-w-xs" />
-              ) : (
-                <div className="text-sm text-muted-foreground">No recording yet</div>
-              )}
-            </>
-          ) : (
-            <div className="text-sm text-muted-foreground">Recording not supported in this browser</div>
-          )}
-        </div>
-      </div>
-      <Button type="submit">Add Word</Button>
+
+      <Button
+        type="submit"
+        className="w-full"
+      >
+        Add word
+      </Button>
     </form>
   )
 }
