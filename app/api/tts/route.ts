@@ -1,7 +1,18 @@
 import { TextToSpeechClient } from "@google-cloud/text-to-speech"
 import { NextResponse } from "next/server"
 
-const client = new TextToSpeechClient()
+const client = new TextToSpeechClient({
+  projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+  credentials: {
+    client_email:
+      process.env.GOOGLE_CLOUD_CLIENT_EMAIL,
+    private_key:
+      process.env.GOOGLE_CLOUD_PRIVATE_KEY?.replace(
+        /\\n/g,
+        "\n"
+      ),
+  },
+})
 
 export async function POST(request: Request) {
   try {
@@ -39,10 +50,9 @@ export async function POST(request: Request) {
       )
     }
 
-    const audioBuffer =
-      Buffer.from(
-        response.audioContent as Uint8Array
-      )
+    const audioBuffer = Buffer.from(
+      response.audioContent as Uint8Array
+    )
 
     return new NextResponse(audioBuffer, {
       headers: {
