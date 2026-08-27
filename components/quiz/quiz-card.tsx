@@ -1,201 +1,350 @@
 "use client"
 
-import type React from "react"
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import type React from "react"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { CheckCircle, XCircle, RotateCcw } from "lucide-react"
-import type { VocabularyWord } from "@/lib/vocabulary-data"
 import { cn } from "@/lib/utils"
-import { AudioPlayer } from "@/components/audio/audio-player"
+import type { VocabularyWord } from "@/lib/vocabulary-data"
 
 interface QuizCardProps {
   word: VocabularyWord
-  onAnswer: (isCorrect: boolean, userAnswer: string, timeTaken: number) => void
+  onAnswer: (
+    isCorrect: boolean,
+    userAnswer: string,
+    timeTaken: number
+  ) => void
   onNext?: () => void
   isLastQuestion?: boolean
   questionNumber: number
   totalQuestions: number
 }
 
-export function QuizCard({ word, onAnswer, onNext, isLastQuestion, questionNumber, totalQuestions }: QuizCardProps) {
-  const [userAnswer, setUserAnswer] = useState("")
-  const [showResult, setShowResult] = useState(false)
-  const [isCorrect, setIsCorrect] = useState(false)
-  const [startTime] = useState(Date.now())
+export function QuizCard({
+  word,
+  onAnswer,
+  onNext,
+}: QuizCardProps) {
+  const [userAnswer, setUserAnswer] =
+    useState("")
 
-  // Create the sentence with blank
-  const words = word.exampleSentence.split(" ")
-  const blankSentence = words.map((w, index) => (index === word.blankPosition ? "______" : w)).join(" ")
+  const [showResult, setShowResult] =
+    useState(false)
 
-  const handleSubmit = () => {
-    const timeTaken = Math.floor((Date.now() - startTime) / 1000)
-    const correct = userAnswer.toLowerCase().trim() === word.word.toLowerCase()
-    setIsCorrect(correct)
-    setShowResult(true)
-    onAnswer(correct, userAnswer, timeTaken)
+  const [isCorrect, setIsCorrect] =
+    useState(false)
+
+  const [startTime] =
+    useState(Date.now())
+
+  const speak = (
+    text: string,
+    rate = 0.85
+  ) => {
+    if (
+      typeof window === "undefined" ||
+      !("speechSynthesis" in window) ||
+      !text.trim()
+    ) {
+      return
+    }
+
+    window.speechSynthesis.cancel()
+
+    const voices =
+      window.speechSynthesis.getVoices()
+
+    const englishVoices =
+      voices.filter((voice) =>
+        voice.lang
+          .toLowerCase()
+          .startsWith("en")
+      )
+
+    const preferredVoice =
+      englishVoices.find((voice) =>
+        /Google US English/i.test(
+          voice.name
+        )
+      ) ||
+      englishVoices.find((voice) =>
+        /Microsoft.*English.*Online/i.test(
+          voice.name
+        )
+      ) ||
+      englishVoices.find(
+        (voice) =>
+          voice.lang
+            .toLowerCase() === "en-us"
+      ) ||
+      englishVoices[0]
+
+    const utterance =
+      new SpeechSynthesisUtterance(text)
+
+    utterance.lang = "en-US"
+    utterance.rate = rate
+    utterance.pitch = 1
+
+    if (preferredVoice) {
+      utterance.voice =
+        preferredVoice
+    }
+
+    window.speechSynthesis.speak(
+      utterance
+    )
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && userAnswer.trim() && !showResult) {
+  const createBlankSentence = () => {
+    const sentence =
+      word.exampleSentence || ""
+
+    const target =
+      word.word.trim()
+
+    if (!sentence || !target) {
+      return sentence
+    }
+
+    // First try to replace the exact word.
+    const escapedTarget =
+      target.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      )
+
+    const regex = new RegExp(
+      `\\b${escapedTarget}\\b`,
+      "i"
+    )
+
+    if (regex.test(sentence)) {
+      return sentence.replace(
+        regex,
+        "______"
+      )
+    }
+
+    // Fallback to the saved blank position.
+    const words =
+      sentence.split(" ")
+
+    if (
+      word.blankPosition >= 0 &&
+      word.blankPosition <
+        words.length
+    ) {
+      words[word.blankPosition] =
+        "______"
+
+      return words.join(" ")
+    }
+
+    return sentence
+  }
+
+  const blankSentence =
+    createBlankSentence()
+
+  const handleSubmit = () => {
+    if (!userAnswer.trim()) return
+
+    const timeTaken = Math.floor(
+      (Date.now() - startTime) / 1000
+    )
+
+    const correct =
+      userAnswer
+        .trim()
+        .toLowerCase() ===
+      word.word.trim().toLowerCase()
+
+    setIsCorrect(correct)
+    setShowResult(true)
+
+    onAnswer(
+      correct,
+      userAnswer,
+      timeTaken
+    )
+  }
+
+  const handleKeyPress = (
+    event: React.KeyboardEvent
+  ) => {
+    if (
+      event.key === "Enter" &&
+      userAnswer.trim() &&
+      !showResult
+    ) {
       handleSubmit()
     }
   }
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">
-            Question {questionNumber} of {totalQuestions}
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="capitalize">
-              {word.category}
-            </Badge>
-            <Badge
-              variant={
-                word.difficulty === "beginner"
-                  ? "default"
-                  : word.difficulty === "intermediate"
-                    ? "secondary"
-                    : "destructive"
-              }
-            >
-              {word.difficulty}
-            </Badge>
-          </div>
-        </div>
-        <Progress value={(questionNumber / totalQuestions) * 100} className="mt-2" />
-      </CardHeader>
+    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+      {/* Definition */}
+      <div className="mb-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          Meaning
+        </p>
 
-      <CardContent className="space-y-6">
-        {/* Word Definition */}
-        <div className="bg-muted p-4 rounded-lg">
-          <h3 className="font-semibold text-card-foreground mb-2">Definition:</h3>
-          <p className="text-muted-foreground">
-            <span className="font-medium">({word.partOfSpeech})</span> {word.definition}
+        <p className="mt-2 text-2xl font-semibold">
+          {word.definition}
+        </p>
+      </div>
+
+      {/* Example */}
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-medium">
+            Complete the sentence
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              speak(
+                word.exampleSentence
+              )
+            }
+            className="rounded-full border px-3 py-1 text-lg hover:bg-muted"
+            title="Listen"
+          >
+            🔊
+          </button>
+        </div>
+
+        <div className="rounded-lg border border-border bg-background p-5">
+          <p className="text-lg leading-relaxed">
+            {blankSentence
+              .split("______")
+              .map(
+                (part, index, array) => (
+                  <span key={index}>
+                    {part}
+
+                    {index <
+                      array.length - 1 && (
+                      <span className="inline-block">
+                        {showResult ? (
+                          <span
+                            className={cn(
+                              "mx-1 rounded px-2 py-1 font-semibold",
+                              isCorrect
+                                ? "bg-green-100 text-green-800"
+                                : "bg-red-100 text-red-800"
+                            )}
+                          >
+                            {word.word}
+                          </span>
+                        ) : (
+                          <Input
+                            value={
+                              userAnswer
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              setUserAnswer(
+                                event.target
+                                  .value
+                              )
+                            }
+                            onKeyDown={
+                              handleKeyPress
+                            }
+                            className="mx-1 inline-block w-36 text-center"
+                            autoFocus
+                          />
+                        )}
+                      </span>
+                    )}
+                  </span>
+                )
+              )}
           </p>
         </div>
+      </div>
 
-        {/* Example Sentence with Blank */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-card-foreground">Complete the sentence:</h3>
-            <AudioPlayer text={word.exampleSentence} showText rate={0.8} />
-          </div>
-
-          <div className="bg-card border-2 border-border rounded-lg p-4">
-            <p className="text-lg leading-relaxed text-balance">
-              {blankSentence.split("______").map((part, index) => (
-                <span key={index}>
-                  {part}
-                  {index < blankSentence.split("______").length - 1 && (
-                    <span className="inline-block">
-                      {showResult ? (
-                        <span
-                          className={cn(
-                            "px-3 py-1 rounded font-semibold",
-                            isCorrect ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800",
-                          )}
-                        >
-                          {word.word}
-                        </span>
-                      ) : (
-                        <Input
-                          value={userAnswer}
-                          onChange={(e) => setUserAnswer(e.target.value)}
-                          onKeyPress={handleKeyPress}
-                          className="inline-block w-32 mx-1 text-center"
-                          placeholder="?"
-                          disabled={showResult}
-                        />
-                      )}
-                    </span>
-                  )}
-                </span>
-              ))}
-            </p>
-          </div>
-        </div>
-
-        {/* Result Display */}
-        {showResult && (
-          <div
+      {/* Result */}
+      {showResult && (
+        <div
+          className={cn(
+            "mt-6 rounded-lg border p-4",
+            isCorrect
+              ? "border-green-200 bg-green-50"
+              : "border-red-200 bg-red-50"
+          )}
+        >
+          <p
             className={cn(
-              "p-4 rounded-lg border-2",
-              isCorrect ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200",
+              "font-semibold",
+              isCorrect
+                ? "text-green-800"
+                : "text-red-800"
             )}
           >
-            <div className="flex items-center gap-2 mb-2">
-              {isCorrect ? (
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              ) : (
-                <XCircle className="w-5 h-5 text-red-600" />
-              )}
-              <span className={cn("font-semibold", isCorrect ? "text-green-800" : "text-red-800")}>
-                {isCorrect ? "Correct!" : "Incorrect"}
-              </span>
-            </div>
-            {!isCorrect && (
-              <div className="text-sm text-muted-foreground">
-                <p>
-                  Your answer: <span className="font-medium">{userAnswer}</span>
-                </p>
-                <p>
-                  Correct answer: <span className="font-medium text-green-700">{word.word}</span>
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-xs">Listen to correct pronunciation:</span>
-                  <AudioPlayer text={word.word} rate={0.7} />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+            {isCorrect
+              ? "Correct!"
+              : "Incorrect"}
+          </p>
 
-        {/* Action Buttons: left slot for submit/restart, right slot always shows Next (disabled until result) */}
-        <div className="flex gap-3">
-          <div className="flex-1">
-            {!showResult ? (
-              <Button onClick={handleSubmit} disabled={!userAnswer.trim()} className="w-full" size="lg">
-                Submit Answer
-              </Button>
-            ) : (
-              <Button
-                onClick={() => {
-                  // Restart the entire quiz by reloading the page
-                  window.location.reload()
-                }}
-                variant="outline"
-                size="lg"
-                className="gap-2 w-full"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Try Another Quiz
-              </Button>
-            )}
-          </div>
+          {!isCorrect && (
+            <p className="mt-2 text-sm">
+              Your answer:{" "}
+              <strong>
+                {userAnswer}
+              </strong>
+            </p>
+          )}
 
-          <div className="flex-1">
-            <Button
-              onClick={() => {
-                if (typeof onNext === "function") {
-                  onNext()
-                }
-              }}
-              size="lg"
-              disabled={!showResult}
-              className="w-full"
+          <div className="mt-3 flex items-center gap-3">
+            <span className="font-semibold">
+              {word.word}
+            </span>
+
+            <button
+              type="button"
+              onClick={() =>
+                speak(word.word)
+              }
+              className="rounded-full border px-3 py-1 hover:bg-background"
+              title="Listen to pronunciation"
             >
-              {isLastQuestion ? "Finish" : "Next"}
-            </Button>
+              🔊
+            </button>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      {/* Buttons */}
+      <div className="mt-6">
+        {!showResult ? (
+          <Button
+            onClick={handleSubmit}
+            disabled={!userAnswer.trim()}
+            className="w-full"
+            size="lg"
+          >
+            答え合わせ
+          </Button>
+        ) : (
+          <Button
+            onClick={() => {
+              if (onNext) {
+                onNext()
+              }
+            }}
+            className="w-full"
+            size="lg"
+          >
+            もう一問
+          </Button>
+        )}
+      </div>
+    </div>
   )
 }

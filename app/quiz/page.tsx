@@ -1,119 +1,141 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { QuizCard } from "@/components/quiz/quiz-card"
-import { getRandomWords, type VocabularyWord } from "@/lib/vocabulary-data"
-import { ProgressManager, type QuizResult } from "@/lib/user-progress"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft } from "lucide-react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
+import { CustomVocabularyManager, CustomWord } from "@/lib/custom-vocabulary"
+import { QuizCard } from "@/components/quiz/quiz-card"
+import { Button } from "@/components/ui/button"
 
 export default function QuizPage() {
-  // Single-question flow: load one random word, then fetch a new one on Next
-  const [currentWord, setCurrentWord] = useState<VocabularyWord | null>(null)
-  const [questionsAnswered, setQuestionsAnswered] = useState(0)
-  const [quizResults, setQuizResults] = useState<QuizResult[]>([])
+  const [words, setWords] = useState<CustomWord[]>([])
+  const [currentWord, setCurrentWord] = useState<CustomWord | null>(null)
   const [mounted, setMounted] = useState(false)
 
-  useEffect(() => {
-    setMounted(true)
-    // Initialize with a single random word
-    const random = getRandomWords(1)[0]
-    setCurrentWord(random)
-  }, [])
+  const loadWords = () => {
+    const manager = CustomVocabularyManager.getInstance()
 
-  const handleAnswer = (isCorrect: boolean, userAnswer: string, timeTaken: number) => {
-    if (!currentWord) return
-    const result: QuizResult = {
-      wordId: currentWord.id,
-      isCorrect,
-      userAnswer,
-      correctAnswer: currentWord.word,
-      timestamp: new Date(),
-      timeTaken,
+    const availableWords = manager
+      .getCustomWords()
+      .filter(
+        (word) =>
+          word.exampleSentence &&
+          word.exampleSentence.trim().length > 0
+      )
+
+    setWords(availableWords)
+
+    if (availableWords.length > 0) {
+      const random =
+        availableWords[
+          Math.floor(
+            Math.random() * availableWords.length
+          )
+        ]
+
+      setCurrentWord(random)
+    } else {
+      setCurrentWord(null)
     }
-
-    // Record the result in progress manager
-    const progressManager = ProgressManager.getInstance()
-    progressManager.recordQuizResult(result, currentWord)
-
-  // Add to results (use functional update to avoid stale closures)
-  setQuizResults((prev) => [...prev, result])
-    // Mark that a question was answered. Next must be pressed to get a new one.
-    setQuestionsAnswered((n) => n + 1)
   }
 
+  useEffect(() => {
+    const initialize = async () => {
+      setMounted(true)
+
+      const manager =
+        CustomVocabularyManager.getInstance()
+
+      await manager.ready()
+
+      loadWords()
+    }
+
+    initialize()
+  }, [])
+
   const handleNext = () => {
-    // Fetch a fresh random word and replace the current one. Keeping the
-    // previous results in quizResults allows the user to review later.
-    const random = getRandomWords(1)[0]
+    if (words.length === 0) return
+
+    const random =
+      words[
+        Math.floor(
+          Math.random() * words.length
+        )
+      ]
+
     setCurrentWord(random)
   }
 
   if (!mounted) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>
-  }
-
-  if (!currentWord) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle>No Words Available</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">There are no vocabulary words available for the quiz.</p>
-            <Link href="/">
-              <Button>Back to Home</Button>
-            </Link>
-          </CardContent>
-        </Card>
+      <div className="flex min-h-screen items-center justify-center">
+        Loading...
       </div>
     )
   }
 
-  // prevent lint warning for quizResults not being used elsewhere
-  void quizResults
+  if (!currentWord) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="w-full max-w-md text-center">
+          <h1 className="text-2xl font-bold">
+            テスト
+          </h1>
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <ArrowLeft className="w-4 h-4" />
-                  Back
-                </Button>
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold text-foreground">TOEIC Quiz</h1>
-                <p className="text-muted-foreground">Fill in the missing words</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">Answered: {questionsAnswered}</Badge>
-            </div>
+          <p className="mt-4 text-muted-foreground">
+            テストできる単語がありません。
+          </p>
+
+          <p className="mt-2 text-sm text-muted-foreground">
+            例文を登録した単語がテストに出題されます。
+          </p>
+
+          <div className="mt-6 flex justify-center gap-3">
+            <Link href="/manage">
+              <Button>
+                単語を登録する
+              </Button>
+            </Link>
+
+            <Link href="/">
+              <Button variant="outline">
+                ホーム
+              </Button>
+            </Link>
           </div>
         </div>
-      </header>
+      </main>
+    )
+  }
 
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        {/* Single-question flow: always render the QuizCard for the current word */}
+  return (
+    <main className="min-h-screen bg-background px-4 py-8">
+      <div className="mx-auto max-w-2xl">
+        <div className="mb-8 flex items-center justify-between">
+          <Link
+            href="/"
+            className="text-sm text-muted-foreground hover:underline"
+          >
+            ← ホーム
+          </Link>
+
+          <h1 className="text-2xl font-bold">
+            テスト
+          </h1>
+
+          <div className="w-12" />
+        </div>
+
         <QuizCard
           key={currentWord.id}
           word={currentWord}
-          onAnswer={handleAnswer}
+          onAnswer={() => {}}
           onNext={handleNext}
           isLastQuestion={false}
           questionNumber={1}
           totalQuestions={1}
         />
-      </main>
-    </div>
+      </div>
+    </main>
   )
 }

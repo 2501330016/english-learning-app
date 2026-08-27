@@ -41,26 +41,37 @@ export function WordList({
     setCustomWords(words || [])
   }, [words])
 
-  const speak = (text: string) => {
-    if (
-      typeof window === "undefined" ||
-      !("speechSynthesis" in window) ||
-      !text.trim()
-    ) {
-      return
+  // Google Cloud Text-to-Speech
+  const speak = async (text: string) => {
+    if (!text.trim()) return
+
+    try {
+      const response = await fetch("/api/tts", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    text,
+  }),
+})
+
+if (!response.ok) {
+  throw new Error("Failed to generate speech")
+}
+
+      const audioBlob = await response.blob()
+      const audioUrl = URL.createObjectURL(audioBlob)
+      const audio = new Audio(audioUrl)
+
+      await audio.play()
+
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl)
+      }
+    } catch (error) {
+      console.error("Speech error:", error)
     }
-
-    window.speechSynthesis.cancel()
-
-    const utterance =
-      new SpeechSynthesisUtterance(text)
-
-    utterance.lang = "en-US"
-    utterance.rate = 0.9
-
-    window.speechSynthesis.speak(
-      utterance
-    )
   }
 
   const openWord = (word: CustomWord) => {
@@ -72,15 +83,11 @@ export function WordList({
     if (!selectedWord) return
 
     setEditWord(selectedWord.word)
-    setEditDefinition(
-      selectedWord.definition
-    )
+    setEditDefinition(selectedWord.definition)
     setEditExample(
       selectedWord.exampleSentence || ""
     )
-    setEditNotes(
-      selectedWord.notes || ""
-    )
+    setEditNotes(selectedWord.notes || "")
 
     setIsEditing(true)
   }
@@ -88,9 +95,7 @@ export function WordList({
   const saveEdit = () => {
     if (!selectedWord) return
 
-    const trimmedWord =
-      editWord.trim()
-
+    const trimmedWord = editWord.trim()
     const trimmedDefinition =
       editDefinition.trim()
 
@@ -108,13 +113,11 @@ export function WordList({
       selectedWord.id,
       {
         word: trimmedWord,
-        definition:
-          trimmedDefinition,
+        definition: trimmedDefinition,
         exampleSentence:
           editExample.trim(),
         notes:
-          editNotes.trim() ||
-          undefined,
+          editNotes.trim() || undefined,
       }
     )
 
@@ -150,9 +153,7 @@ export function WordList({
     const manager =
       CustomVocabularyManager.getInstance()
 
-    manager.deleteWord(
-      selectedWord.id
-    )
+    manager.deleteWord(selectedWord.id)
 
     setCustomWords(
       manager.getCustomWords()
@@ -168,6 +169,7 @@ export function WordList({
     return (
       <div className="py-12 text-center text-muted-foreground">
         <p>まだ単語がありません。</p>
+
         <p className="mt-2 text-sm">
           「Add Words」から単語を追加してください。
         </p>
